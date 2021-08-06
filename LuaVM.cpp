@@ -8,6 +8,9 @@ LuaVM::LuaVM() : L(lua_newstate(LuaDefAlloc, nullptr))
 
 	/*
 	* create a metatable for mapped native types, add it to the registry and push it on the stack
+	* native types can be owned by Lua (full userdata) or owned by C++ (lightuserdata): 
+	* in both cases they share the same metatable with __index, __newindex and __gc metamethods
+	* (__gc is called by Lua only for managed objects - aka full userdata)
 	*/ 
 
 	luaL_newmetatable(L, "metatable");   // add a "metatable" key with a table to be used as metatable for userdata in the Lua Registry and push it onto the stack
@@ -31,23 +34,24 @@ LuaVM::LuaVM() : L(lua_newstate(LuaDefAlloc, nullptr))
 	lua_settable(L, -3);
 
 	/*
-	* create and set a metatable for lightuserdata
+	* create and set a metatable for lightuserdata type
+	* NOTE: not necessary anymore, since all objects passed to/from Lua are full userdata
 	*/
 
-	lua_pushlightuserdata(L, 0);
-	lua_newtable(L);
-	
-	// add __index metamethod
-	lua_pushstring(L, "__index");
-	lua_pushcfunction(L, Index);
-	lua_settable(L, -3);
+	//lua_pushlightuserdata(L, 0);
+	//lua_newtable(L);
+	//
+	//// add __index metamethod
+	//lua_pushstring(L, "__index");
+	//lua_pushcfunction(L, Index);
+	//lua_settable(L, -3);
 
-	// add __newindex metamethod
-	lua_pushstring(L, "__newindex");
-	lua_pushcfunction(L, NewIndex);
-	lua_settable(L, -3);
+	//// add __newindex metamethod
+	//lua_pushstring(L, "__newindex");
+	//lua_pushcfunction(L, NewIndex);
+	//lua_settable(L, -3);
 
-	lua_setmetatable(L, -2);
+	//lua_setmetatable(L, -2);
 }
 
 bool LuaVM::LoadFile(std::string const &scriptFile)
@@ -83,6 +87,10 @@ bool LuaVM::LoadString(std::string const &script)
 
 bool LuaVM::Execute()
 {
+	/*
+	* execute a loaded script in protected mode
+	*/
+
 	if (lua_pcall(L, 0, LUA_MULTRET, 0) != LUA_OK)
 	{
 		std::cout << lua_tostring(L, -1) << std::endl;
@@ -107,7 +115,7 @@ void LuaVM::Close()
 LuaObject LuaVM::GetGlobal(const std::string &name)
 {
 	lua_getglobal(L, name.c_str());             // push a global variable on the stack
-	int ref = luaL_ref(L, LUA_REGISTRYINDEX);   // pop the variable from the stack and add it to the registry with key = ref
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);   // pop the variable from the stack and add it to the registry with key = ref: reg[ref] = value
 	
 	LuaObject luaObject(L, ref);
 	return luaObject;
@@ -118,7 +126,8 @@ int LuaVM::NewObject(lua_State *L)
 	/* 
 	* Create a new userdata and construct a new object in it:
 	* When creating a new object of a user-defined type a userdata is created (which is a buffer of memory
-	* managed by Lua), with the size of the object to store.
+	* allocated and managed by Lua), with the size in bytes of the object to store. Once Lua returns a chunk 
+	* of allocated memory, an object is placement-new'ed inside that memory:
 	*/
 
 	Reflect::TypeDescriptor *typeDesc = (Reflect::TypeDescriptor*)lua_touserdata(L, lua_upvalueindex(1));  // get upvalue n.1 from C closure (type descriptor of new object)
@@ -126,7 +135,8 @@ int LuaVM::NewObject(lua_State *L)
 	void *rawMem = lua_newuserdatauv(L, sizeof(Reflect::Any), 1);          // create a full userdata (memory buffer managed by Lua) with 1 uservalue and put it on the stack
 	//void *rawMem = lua_newuserdata(L, sizeof(Reflect::any));             // same - default 1 uservalue
 	
-	std::size_t numLuaArgs = lua_gettop(L) - 1;  // top element is userdata
+	std::size_t numLuaArgs = lua_gettop(L) - 1;  // number of arguments passed by Lua is number of elements on the stack - 1, top element is userdata
+
 	bool constructed = false;
 	for (auto *constructor : typeDesc->GetConstructors())
 		if (constructor->GetNumParams() == numLuaArgs)
@@ -151,7 +161,7 @@ int LuaVM::NewObject(lua_State *L)
 
 			if (argsChecked)
 			{
-				new(rawMem) Reflect::Any(constructor->NewInstance(argsFromStack));  // construct any in userdata memory (a type-erased void* + a type descriptor)
+				new(rawMem) Reflect::Any(constructor->NewInstance(argsFromStack));  // construct an Any object in userdata memory (a type-erased void* + a type descriptor)
 				constructed = true;
 				break;
 			}
@@ -163,6 +173,7 @@ int LuaVM::NewObject(lua_State *L)
 	/* 
 	* Associate a metatable with the userdata:
 	* A generic metatable with all the metamethods is created at script initialization and stored into the registry.
+	* All full userdata (and lightuserdata) share the same generic metatable
 	*/
 
 	//luaL_setmetatable(L, "metatable");  // set metatable from Lua registry as metatable for element at top of stack
@@ -171,11 +182,11 @@ int LuaVM::NewObject(lua_State *L)
 
 	/* 
 	* Associate uservalue(s) with the userdata:
-	* Each userdata can have uservalues associated with it.
+	* each userdata can have uservalues associated with it.
 	* Uservalues can be retrieved with lua_getiuservalue(L, userdata_index, uservalue_index)
 	* or macro lua_getuservalue(L, userdata_index) which retrieves default uservalue 1.
-	* An uservalues is associated with the userdata of the new object, a table, which will be
-	* used to add properties to the mapped type (besides the native properties of the native type).
+	* An uservalue is associated with the userdata of the new object, a table, which will be
+	* used to add properties to the mapped type on the Lua side (besides the properties of the native type).
 	*/
 
 	lua_newtable(L);                 // create a new table and push on the stack
@@ -255,8 +266,7 @@ int LuaVM::NewIndex(lua_State *L)
 
 int LuaVM::InvokeMethod(lua_State *L)
 {
-	Reflect::Function const *memberFunction = static_cast<Reflect::Function*>(lua_touserdata(L, lua_upvalueindex(1)));  // closure upvalue 1: member function meta type
-	
+	Reflect::Function const *memberFunction = static_cast<Reflect::Function*>(lua_touserdata(L, lua_upvalueindex(1)));  // closure upvalue 1: member function meta opbject
 	assert(memberFunction);  // upvalue present
 	
 	Reflect::Any &object = *static_cast<Reflect::Any*>(lua_touserdata(L, 1));      // first arg is self                             // arg 1: self object
@@ -276,8 +286,8 @@ int LuaVM::InvokeMethod(lua_State *L)
 		auto *fromLua = paramType->GetMemberFunction("FromLua");
 		auto *is = paramType->GetMemberFunction("Is");
 
-		if (*is->Invoke(Reflect::AnyRef(), L, i + 1).TryCast<bool>())               // check type of arg on stack
-			argsFromStack.push_back(fromLua->Invoke(Reflect::AnyRef(), L, i + 1));  // arg 1 is self object
+		if (*is->Invoke(Reflect::AnyRef(), L, i + 1).TryCast<bool>())                  // check type of arg on stack
+			argsFromStack.emplace_back(fromLua->Invoke(Reflect::AnyRef(), L, i + 1));  // start from 2, arg 1 is self object
 		else
 			luaL_error(L, "calling function \"%s\" with wrong type for argument %d: expected \"%s\", got \"%s\"", memberFunction->GetName().c_str(), i - 1, paramType->GetName().c_str(), lua_typename(L, lua_type(L, i + 1)));
 	}
@@ -295,7 +305,8 @@ int LuaVM::InvokeMethod(lua_State *L)
 
 int LuaVM::InvokeFunction(lua_State *L)
 {
-	Reflect::Function *function = (Reflect::Function*)lua_touserdata(L, lua_upvalueindex(1));
+	Reflect::Function *function = (Reflect::Function*)lua_touserdata(L, lua_upvalueindex(1));  // closure upvalue 1: member function meta object
+	assert(function);  // upvalue present
 
 	int numLuaArgs = lua_gettop(L);
 	size_t numFunParams = function->GetNumParams();
@@ -312,8 +323,8 @@ int LuaVM::InvokeFunction(lua_State *L)
 		auto *fromLua = paramType->GetMemberFunction("FromLua");
 		auto *is = paramType->GetMemberFunction("Is");
 
-		if (*is->Invoke(Reflect::AnyRef(), L, i).TryCast<bool>())               // check type of arg on stack
-			argsFromStack.push_back(fromLua->Invoke(Reflect::AnyRef(), L, i)); 
+		if (*is->Invoke(Reflect::AnyRef(), L, i).TryCast<bool>())                   // check type of arg on stack
+			argsFromStack.emplace_back(fromLua->Invoke(Reflect::AnyRef(), L, i)); 
 		else
 			luaL_error(L, "calling function \"%s\" with wrong type for argument %d: expected \"%s\", got \"%s\"", function->GetName().c_str(), i - 1, paramType->GetName().c_str(), lua_typename(L, lua_type(L, i + 1)));
 	}

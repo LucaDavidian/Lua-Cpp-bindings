@@ -46,6 +46,7 @@ public:
 	void SetY(float y) { this->y = y; }
 
 	std::string GetName() const { return name; }
+	void SetName(const std::string &name) { this->name = name; }
 private:
 	float x;
 	float y;
@@ -295,7 +296,7 @@ private:
 std::string Print(const std::string &msg)
 {
 	std::cout << msg << std::endl;
-	return msg + "...";
+	return "from C++: " + msg;
 }
 
 float GetSpriteX(Sprite &sprite)
@@ -335,9 +336,11 @@ int main(int argc, char *argv[])
 		.AddConstructor<float, float>()
 		.AddDataMember<&Sprite::SetX, &Sprite::GetX>("x")
 		.AddDataMember<&Sprite::SetY, &Sprite::GetY>("y")
+		.AddDataMember<&Sprite::SetName, &Sprite::GetName>("name")
 		.AddMemberFunction(&Sprite::Move, "move")    
 		.AddMemberFunction(&Sprite::Draw, "draw")
 		.AddMemberFunction(&Sprite::GetName, "get_name")
+		.AddMemberFunction(&Sprite::SetName, "set_name")
 		.AddMemberFunction(&LuaStack<Sprite>::FromLua, "FromLua")
 		.AddMemberFunction(&LuaStack<Sprite>::ToLua, "ToLua")
 		.AddMemberFunction(LuaStack<Sprite>::Is, "Is");
@@ -346,43 +349,46 @@ int main(int argc, char *argv[])
 
 	-- a Lua script
 
-	s = cprint('once upon a time')                       -- call C++ free functions 
-	print(s)
+	--s = cprint('running a Lua script...')                -- call C++ free function from Lua
+	--print(s)
+	--
+	---- user-defined types:
+	--local sprite1 = Sprite.new()                         -- create object (global table Sprite with new)
+	--local sprite2 = Sprite.new(3.5, 5.5)                 -- constructor with arguments
+	--
+	--print('drawing sprite from Lua '); sprite1:draw()              -- call object's methods (__index)
+	--print('moving sprite to 53, 22:'); sprite1:move(53, 22)        -- same as sprite.move(sprite, 1, 2)    
+	--print('drawing sprite after move:'); sprite1:draw()
+	--
+	--sprite2.x = 9                                         -- access object properties - write (__newindex)
+	--local x = sprite2.x                                   -- access object properties - read  (__index)	
+	--print('x = ' .. x)
+	--
+	--sprite1.y = 21                                       
+	--print('sprite: ' .. 'x: ' .. sprite1.x .. ' y: ' .. sprite1.y)
+	--sprite1.draw(sprite1)
+	--
+	--print(sprite1:get_name())                                -- methods with return value
+	--
+	--sprite1.z = 42                                                           -- add properties to native object (__newindex and type user value table)
+	--print('x: ' .. sprite1.x .. ' y: ' .. sprite1.y .. ' z: ' .. sprite1.z)    -- access non-native property (__index and type user value table)
+    --            
+	--print('sprite x: ' .. getSpriteX(sprite1))   -- call C++ free function from Lua
 
-	-- user-defined types:
-	local sprite = Sprite.new()                         -- create object (global table Sprite with new)
-	local sprite2 = Sprite.new(3.5, 5.5)                -- constructor with arguments
-	print('sprite2: '); sprite2:draw()                  -- call object's methods (__index)
-	print('moving sprite:')
-	sprite:move(53, 22)                                 -- same as sprite.move(sprite, 1, 2)    
-	print('drawing sprite:')
-	sprite:draw()
-	sprite.x = 9                                        -- access object properties - write (__newindex)
-	x = sprite.x                                        -- access object properties - read  (__index)
-	print('x = ' .. x)
-	sprite.y = 21                                       
-	print('sprite: ' .. 'x: ' .. sprite.x .. ' y: ' .. sprite.y)
-	sprite:draw()
-
-	s = sprite:get_name()                               -- methods with return value
-	print(s)
-
-	sprite.z = 42                                                           -- add properties to native object (__newindex and type user value table)
-	print('x: ' .. sprite.x .. ' y: ' .. sprite.y .. ' z: ' .. sprite.z)    -- access non-native property (__index and type user value table)
-
-	x = getSpriteX(sprite)                -- call C++ free functions
-	print('sprite x: ' .. x)
-
-	function foo(a, b)                    -- call Lua function from native code
+	function foo(a, b)                           -- call Lua function from C++ code
 		print('result = ' .. a + b)
 		return a + b
 	end
 
-	doSomething = function(sprite)
+	doSomething = function(sprite)                       -- C++ can call Lua function passing user defined types (lightuserdata has the same metatable as full userdata)
 		print('in doSomething: ' .. getSpriteX(sprite))
 		print(sprite.x)
 		sprite.y = 3.3
 		--sprite.z = 10  -- error
+	end
+
+	function doSomethingElse()
+		print('not really')
 	end
 
 	)";
@@ -391,7 +397,7 @@ int main(int argc, char *argv[])
 	LuaVM script;
 
 	// bind types to Lua (all reflection data is exposed to Lua)
-	script.BindType<Sprite>();
+	script.BindNativeType<Sprite>();
 
 	// register free function
 	script.BindNativeFunction(&Print, "cprint");
@@ -413,8 +419,10 @@ int main(int argc, char *argv[])
 
 	Sprite sprite(8.0f, 0.3f);
 	std::cout << "before script: ";	sprite.Draw();
-	script.CallScriptFunction("doSomething", sprite);  // TODO_pass_by_value_or_reference
+	script.CallScriptFunction("doSomething", sprite);  // #TODO_pass_by_value_or_reference
 	std::cout << "after script: "; sprite.Draw();
+
+	script.CallScriptFunction("doSomethingElse");
 	
 	{
 		LuaObject lo = script.GetGlobal("doSomething");
@@ -424,6 +432,63 @@ int main(int argc, char *argv[])
 		if (lo2.IsNumber())
 			std::cout << "x = " << lo2.Cast<int>() << std::endl;
 	}  // Lua objects destroyed here
+
+	if (!script.LoadFile("scripts/script.lua"))
+	{
+		std::cout << "error loading Lua script\n";
+		return -1;
+	}
+
+	if (!script.Execute())
+	{
+		std::cout << "error executing Lua script\n";
+		return -2;
+	}
+
+	{
+		LuaObject levelTable = script.GetGlobal("level");
+
+		std::cout << "level is a table? " << std::boolalpha << levelTable.IsTable() << std::endl;
+
+		LuaObject name = levelTable.Get("player").Get("name");
+		std::string nameString = levelTable.Get("player").Get("name");
+
+		if (name.IsValid())
+		{
+			std::cout << "name is: " << name.Cast<std::string>() << std::endl;
+			std::cout << "name is: " << nameString << std::endl;
+		}
+
+		LuaObject transformComponentTable = levelTable.Get("player").Get("components").Get("transform");
+
+		struct TransformComponent
+		{
+			float x, y, z;
+		};
+
+		TransformComponent tc = { transformComponentTable.Get(1), transformComponentTable.Get(2), transformComponentTable.Get(3) };
+		std::cout << "Transform Component: x = " << tc.x << ", y = " << tc.y << ", z = " << tc.z << std::endl;
+
+		LuaObject componentTable = levelTable.Get("player").Get("components");
+
+		struct SpriteComponent
+		{
+			std::string name;
+			int numFrames;
+		} sc = { componentTable.Get("sprite").Get("name"), componentTable.Get("sprite").Get("num_frames") };
+
+		std::cout << "sprite file: " << sc.name << ", sprite frames: " << sc.numFrames << std::endl;
+	}
+
+	Sprite sprite2;
+	sprite2.SetName("John Doe");
+	sprite.SetName("Hank Marshall");
+
+	script.CallScriptFunction("a_Lua_function", "a string from C++", 10, 23, sprite, sprite2);
+	std::cout << "sprite names: " << sprite.GetName() << ", " << sprite2.GetName() << std::endl;
+
+	script.CallScriptFunction("a_Lua_function", "a string from C++", 10, 23, Reflect::AnyRef(sprite), Reflect::AnyRef(sprite2));
+	std::cout << "sprite names: " << sprite.GetName() << ", " << sprite2.GetName() << std::endl;
 
 	// close Lua state/VM
 	script.Close(); 

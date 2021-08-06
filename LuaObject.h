@@ -1,6 +1,8 @@
 #ifndef LUA_OBJECT_H
 #define LUA_OBJECT_H
 
+#include "LuaStack.h"
+
 class LuaObject
 {
 	friend class LuaVM;
@@ -28,7 +30,7 @@ public:
 	LuaObject &operator=(LuaObject const &other);
 	LuaObject &operator=(LuaObject &&other);
 	
-	//bool IsNil() const { lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef); bool is = lua_type(L, -1) == LUA_TNIL; lua_pop(L, 1);return is; }
+	//bool IsNil() const { lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef); bool is = lua_type(L, -1) == LUA_TNIL; lua_pop(L, 1); return is; }
 	bool IsNil() const { return mLuaRef == LUA_REFNIL; }
 	bool IsBoolean() const { lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef); bool is = lua_type(L, -1) == LUA_TBOOLEAN; lua_pop(L, 1);  return is; }
 	bool IsString() const { lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef); bool is = lua_type(L, -1) == LUA_TSTRING; lua_pop(L, 1); return is; }
@@ -48,6 +50,53 @@ public:
 		lua_pop(L, 1);                                         // pop value from stack (balance)
 		
 		return value;
+	}
+
+	LuaObject Get(const std::string &key)
+	{
+		int refType = lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef);  // push referenced value onto the stack, return the type
+
+		lua_pushstring(L, key.c_str());  // push key
+		lua_gettable(L, -2);             // pop key and table and push value
+
+		if (lua_type(L, -1) == LUA_TNIL)
+		{
+			lua_pop(L, 1);
+			return LuaObject(L);
+		}
+
+		return LuaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+	}
+
+	LuaObject Get(int index)
+	{
+		int refType = lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef);  // push referenced value onto the stack, return the type
+
+		int valueType = lua_geti(L, -1, index);   // pop index and table and push value
+
+		if (lua_type(L, -1) == LUA_TNIL)
+		{
+			lua_pop(L, 1);
+			return LuaObject(L);
+		}	
+
+		return LuaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+	}
+
+	bool IsValid() const
+	{
+		return mLuaRef != LUA_NOREF;
+	}
+
+	template <typename T>
+	operator T() const
+	{
+		int refType = lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef);  // push referenced value onto the stack, return the type
+
+		T t = LuaStack<T>::FromLua(L, -1);
+		lua_pop(L, 1);
+
+		return t;
 	}
 
 private:
