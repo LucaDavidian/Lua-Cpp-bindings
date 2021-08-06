@@ -6,16 +6,17 @@
 * 
 * Lua has 9 types:
 * 
-* LUA_TNIL
-* LUA_TBOOLEAN
-* LUA_TNUMBER
-* LUA_TSTRING
-* LUA_TTABLE
-* LUA_TFUNCTION
-* LUA_TUSERDATA_
-* LUA_TLIGHTUSERDATA
-* LUA_TTHREAD
-* 
+* -1: (LUA_TNONE) 
+* 0 : LUA_TNIL
+* 1 : LUA_TBOOLEAN
+* 2 : LUA_TLIGHTUSERDATA
+* 3 : LUA_TNUMBER
+* 4 : LUA_TSTRING
+* 5 : LUA_TTABLE
+* 6 : LUA_TFUNCTION
+* 7 : LUA_TUSERDATA
+* 8 : LUA_TTHREAD
+*  
 * the Stack structure handles conversions between Lua types to native types (primitive and user defined) in both directions
 */
 
@@ -33,7 +34,7 @@ struct LuaStack
 	static void ToLua(lua_State *L, Reflect::Any object)   
 	{
 		void *rawMem = lua_newuserdata(L, sizeof(Reflect::Any));   
-		new (rawMem) Reflect::Any(object);
+		new (rawMem) Reflect::Any(std::move(object));
 
 		luaL_getmetatable(L, "metatable");
 		lua_setmetatable(L, -2);
@@ -84,6 +85,27 @@ struct LuaStack<int>
 	}
 
 	static int FromLua(lua_State *L, int index)
+	{
+		//return luaL_checkinteger(L, index);
+		lua_Integer result = lua_tointeger(L, index);
+		return result;
+	}
+
+	static bool Is(lua_State *L, int index)
+	{
+		return lua_isinteger(L, index);
+	}
+};
+
+template <>
+struct LuaStack<unsigned int>
+{
+	static void ToLua(lua_State *L, unsigned int i)
+	{
+		lua_pushinteger(L, i);
+	}
+
+	static unsigned int FromLua(lua_State *L, int index)
 	{
 		//return luaL_checkinteger(L, index);
 		lua_Integer result = lua_tointeger(L, index);
@@ -267,7 +289,7 @@ inline void PushArgsToLua(lua_State *L)
 template <typename Arg>
 void PushArgsToLua(lua_State *L, Arg &&arg)
 {
-	LuaStack<std::remove_reference_t<Arg>>::ToLua(L, std::forward<Arg>(arg));
+	LuaStack<std::remove_cv_t<std::remove_reference_t<Arg>>>::ToLua(L, std::forward<Arg>(arg));
 }
 
 template <typename Arg, typename... Rest>

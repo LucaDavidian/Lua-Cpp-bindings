@@ -8,16 +8,20 @@ class LuaObject
 	friend class LuaVM;
 
 public:
-	LuaObject(lua_State *L) : L(L), mLuaRef(LUA_NOREF) {}
-	LuaObject(lua_State *L, int luaRef) : L(L), mLuaRef(luaRef) {}
+	LuaObject(lua_State *L) : L(L), mLuaRef(LUA_NOREF), mLuaType(LuaType::NONE) {}
+	LuaObject(lua_State *L, int luaRef) : L(L), mLuaRef(luaRef) 
+	{
+		mLuaType = static_cast<LuaType>(lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef));
+		lua_pop(L, 1);
+	}
 
-	LuaObject(const LuaObject &other) : L(other.L)
+	LuaObject(const LuaObject &other) : L(other.L), mLuaType(other.mLuaType)
 	{
 		lua_rawgeti(L, LUA_REGISTRYINDEX, other.mLuaRef);
 		mLuaRef= luaL_ref(L, LUA_REGISTRYINDEX);
 	}
 
-	LuaObject(LuaObject &&other) : L(other.L), mLuaRef(other.mLuaRef)
+	LuaObject(LuaObject &&other) : L(other.L), mLuaRef(other.mLuaRef), mLuaType(other.mLuaType)
 	{
 		other.mLuaRef = LUA_NOREF;
 	}
@@ -91,17 +95,32 @@ public:
 	template <typename T>
 	operator T() const
 	{
-		int refType = lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef);  // push referenced value onto the stack, return the type
+		LuaType refType = static_cast<LuaType>(lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef));  // push referenced value onto the stack, return the type
 
-		T t = LuaStack<T>::FromLua(L, -1);
+		T t = LuaStack<std::remove_cv_t<std::remove_reference_t<T>>>::FromLua(L, -1);
 		lua_pop(L, 1);
 
 		return t;
 	}
 
+	enum class LuaType
+	{
+		NONE = LUA_TNONE,
+		NIL = LUA_TNIL,
+		BOOLEAN = LUA_TBOOLEAN,
+		LIGHTUSERDATA = LUA_TLIGHTUSERDATA,
+		NUMBER = LUA_TNUMBER,
+		STRING = LUA_TSTRING,
+		TABLE = LUA_TTABLE,
+		FUNCTION = LUA_TFUNCTION,
+		USERDATA = LUA_TUSERDATA,
+		THREAD = LUA_TTHREAD,
+	};
+
 private:
 	lua_State *L;
 	int mLuaRef;
+	LuaType mLuaType;
 };
 
 #endif  // LUA_OBJECT_H
