@@ -286,19 +286,12 @@ inline void PushArgsToLua(lua_State *L)
 	(void*)L;
 }
 
-template <typename Arg>
-void PushArgsToLua(lua_State *L, Arg &&arg)
-{
-	LuaStack<std::remove_cv_t<std::remove_reference_t<Arg>>>::ToLua(L, std::forward<Arg>(arg));
-}
-
 template <typename Arg, typename... Rest>
 void PushArgsToLua(lua_State *L, Arg &&arg, Rest&&... rest)
 {
-	PushArgsToLua(L, std::forward<Arg>(arg));
+	LuaStack<std::remove_cv_t<std::remove_reference_t<Arg>>>::ToLua(L, std::forward<Arg>(arg));
 
-	if (sizeof...(Rest) > 0)
-		PushArgsToLua(L, std::forward<Rest>(rest)...);
+	PushArgsToLua(L, std::forward<Rest>(rest)...);
 }
 
 #endif  // LUA_STACK_H
