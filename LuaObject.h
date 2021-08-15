@@ -112,7 +112,7 @@ public:
 		LuaType refType = static_cast<LuaType>(lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef));  // push referenced value onto the stack, return the type
 
 		lua_pushstring(L, key.c_str());  // push key
-		lua_gettable(L, -2);             // pop key and table and push value
+		lua_gettable(L, -2);             // pop key and push value
 
 		if (lua_type(L, -1) == LUA_TNIL)
 		{
@@ -120,13 +120,17 @@ public:
 			return LuaObject(L);
 		}
 
-		return LuaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+		LuaObject luaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+		
+		lua_pop(L, 1);  // pop table
+
+		return luaObject;
 	}
 
 	LuaObject Get(int index)
 	{
 		LuaType refType = static_cast<LuaType>(lua_rawgeti(L, LUA_REGISTRYINDEX, mLuaRef));  // push referenced value onto the stack, return the type
-		LuaType valueType = static_cast<LuaType>(lua_geti(L, -1, index));                    // pop index and table and push value
+		LuaType valueType = static_cast<LuaType>(lua_geti(L, -1, index));                    // push value
 
 		if (lua_type(L, -1) == LUA_TNIL)
 		{
@@ -134,7 +138,11 @@ public:
 			return LuaObject(L);
 		}	
 
-		return LuaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+		LuaObject luaObject(L, luaL_ref(L, LUA_REGISTRYINDEX));
+		
+		lua_pop(L, 1);  // pop table
+
+		return luaObject;
 	}
 
 	std::pair<LuaObject, LuaObject> GetNext()

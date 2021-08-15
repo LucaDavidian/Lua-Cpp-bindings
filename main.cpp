@@ -419,19 +419,17 @@ int main(int argc, char *argv[])
 
 	Sprite sprite(8.0f, 0.3f);
 	std::cout << "before script: ";	sprite.Draw();
-	script.CallScriptFunction("doSomething", sprite);  // #TODO_pass_by_value_or_reference
+	script.CallScriptFunction("doSomething", sprite);  
 	std::cout << "after script: "; sprite.Draw();
 
 	script.CallScriptFunction("doSomethingElse");
 	
-	{
-		LuaObject lo = script.GetGlobal("doSomething");
-		std::cout << "is function: " << std::boolalpha << lo.IsFunction() << std::endl;
+	LuaObject lo = script.GetGlobal("doSomething");
+	std::cout << "is function: " << std::boolalpha << lo.IsFunction() << std::endl;
 
-		LuaObject lo2 = script.GetGlobal("x");
-		if (lo2.IsNumber())
-			std::cout << "x = " << lo2.Cast<int>() << std::endl;
-	}  // Lua objects destroyed here
+	LuaObject lo2 = script.GetGlobal("x");
+	if (lo2.IsNumber())
+		std::cout << "x = " << lo2.Cast<int>() << std::endl;
 
 	if (!script.LoadFile("scripts/script.lua"))
 	{
@@ -445,40 +443,38 @@ int main(int argc, char *argv[])
 		return -2;
 	}
 
+	LuaObject levelTable = script.GetGlobal("level");
+
+	std::cout << "level is a table? " << std::boolalpha << levelTable.IsTable() << std::endl;
+
+	LuaObject name = levelTable.Get("player").Get("name");
+	std::string nameString = levelTable.Get("player").Get("name");
+
+	if (name.IsValid())
 	{
-		LuaObject levelTable = script.GetGlobal("level");
-
-		std::cout << "level is a table? " << std::boolalpha << levelTable.IsTable() << std::endl;
-
-		LuaObject name = levelTable.Get("player").Get("name");
-		std::string nameString = levelTable.Get("player").Get("name");
-
-		if (name.IsValid())
-		{
-			std::cout << "name is: " << name.Cast<std::string>() << std::endl;
-			std::cout << "name is: " << nameString << std::endl;
-		}
-
-		LuaObject transformComponentTable = levelTable.Get("player").Get("components").Get("transform");
-
-		struct TransformComponent
-		{
-			float x, y, z;
-		};
-
-		TransformComponent tc = { transformComponentTable.Get(1), transformComponentTable.Get(2), transformComponentTable.Get(3) };
-		std::cout << "Transform Component: x = " << tc.x << ", y = " << tc.y << ", z = " << tc.z << std::endl;
-
-		LuaObject componentTable = levelTable.Get("player").Get("components");
-
-		struct SpriteComponent
-		{
-			std::string name;
-			int numFrames;
-		} sc = { componentTable.Get("sprite").Get("name"), componentTable.Get("sprite").Get("num_frames") };
-
-		std::cout << "sprite file: " << sc.name << ", sprite frames: " << sc.numFrames << std::endl;
+		std::cout << "name is: " << name.Cast<std::string>() << std::endl;
+		std::cout << "name is: " << nameString << std::endl;
 	}
+
+	LuaObject transformComponentTable = levelTable.Get("player").Get("components").Get("transform");
+
+	struct TransformComponent
+	{
+		float x, y, z;
+	};
+
+	TransformComponent tc = { transformComponentTable.Get(1), transformComponentTable.Get(2), transformComponentTable.Get(3) };
+	std::cout << "Transform Component: x = " << tc.x << ", y = " << tc.y << ", z = " << tc.z << std::endl;
+
+	LuaObject componentTable = levelTable.Get("player").Get("components");
+
+	struct SpriteComponent
+	{
+		std::string name;
+		int numFrames;
+	} sc = { componentTable.Get("sprite").Get("name"), componentTable.Get("sprite").Get("num_frames") };
+
+	std::cout << "sprite file: " << sc.name << ", sprite frames: " << sc.numFrames << std::endl;
 
 	Sprite sprite2;
 	sprite2.SetName("John Doe");
@@ -489,9 +485,6 @@ int main(int argc, char *argv[])
 
 	script.CallScriptFunction("a_Lua_function", "a string from C++", 10, 23, Reflect::AnyRef(sprite), Reflect::AnyRef(sprite2));
 	std::cout << "sprite names: " << sprite.GetName() << ", " << sprite2.GetName() << std::endl;
-
-	// close Lua state/VM
-	script.Close(); 
 
 	return 0;
 }

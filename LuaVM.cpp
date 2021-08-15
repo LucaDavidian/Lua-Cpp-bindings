@@ -2,7 +2,7 @@
 #include "allocator.hpp"
 #include <iostream>
 
-LuaVM::LuaVM() : L(lua_newstate(LuaDefAlloc, nullptr))
+LuaVM::LuaVM() : L(luaL_newstate()) // L(lua_newstate(LuaDefAlloc, nullptr))
 {
 	luaL_openlibs(L);
 
