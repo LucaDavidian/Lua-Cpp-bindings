@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
 	Reflect::Reflect<lua_Number>("lua_Number")
 		.AddConversion<float>();
 
-	// register types
+	// register user-defined types
 	Reflect::Reflect<Sprite>("Sprite")
 		.AddConstructor<>()
 		.AddConstructor<float>()
