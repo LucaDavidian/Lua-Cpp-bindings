@@ -27,7 +27,7 @@ struct LuaStack
 {
 	/*
 	* All user defined types are passed to/from Lua as userdata containing Any variables
-	* arguments to be passed by value are passed as-is, arguments to be passed by reference are wrapper in AnyRef;
+	* arguments to be passed by value are passed as-is, arguments to be passed by reference are wrapped in AnyRef;
 	* arguments passed by value are full userdata, but the __gc metamethod invokes the AnyRef destructor, which does nothing
 	*/
 

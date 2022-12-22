@@ -44,7 +44,7 @@ private:
 	// invoked when creating registered user defined types in Lua
 	static int NewObject(lua_State*);
 
-	// in user defined type metatable (used by full userdata and lightuserdata)
+	// in user defined type metatable (used by full userdata and light userdata)
 	static int Finalize(lua_State*);    // __gc metamethod
 	static int Index(lua_State*);       // __index metamethod
 	static int NewIndex(lua_State*);    // __newindex metamethod
@@ -70,9 +70,9 @@ void LuaVM::BindNativeType()
 	lua_setglobal(L, typeDescriptor->GetName().c_str());   // pop the table from the stack and create a global variable with the name of the type
 
 	/* 
-	* Add the new method to the table:
+	* Add the "new" method to the table:
 	* a "new" method is added to the global table which lets scripts create objects of that type as Type.new()
-	* every new method has the type descriptor of the type of object to be created as an upvalue
+	* every "new" method has the type descriptor of the type of object to be created as an upvalue
 	*/
 
 	//lua_pushcfunction(L, NewObject);
