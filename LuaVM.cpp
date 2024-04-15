@@ -196,15 +196,6 @@ int LuaVM::NewObject(lua_State *L)
 	return 1;    // return a new object
 }
 
-int LuaVM::Finalize(lua_State *L)
-{
-	Reflect::Any *any = static_cast<Reflect::Any*>(lua_touserdata(L, -1));
-	
-	any->~BasicAny();
-
-	return 0;
-}
-
 int LuaVM::Index(lua_State *L)
 {
 	Reflect::Any *object = static_cast<Reflect::Any*>(lua_touserdata(L, -2));   // arg 1: userdata
@@ -212,7 +203,7 @@ int LuaVM::Index(lua_State *L)
 
 	const Reflect::TypeDescriptor *typeDesc = object->GetType();
 
-	if (Reflect::DataMember *dataMember = typeDesc->GetDataMember(key))                         // key is a data member
+	if (Reflect::DataMember *dataMember = typeDesc->GetDataMember(key))         // key is a data member
 	{
 		Reflect::Any value = dataMember->Get(*object);
 
@@ -260,6 +251,15 @@ int LuaVM::NewIndex(lua_State *L)
 	}
 	else   // key is not present
 		luaL_error(L, "type %s doesn't have field %s", typeDesc->GetName().c_str(), key);
+
+	return 0;
+}
+
+int LuaVM::Finalize(lua_State *L)
+{
+	Reflect::Any *any = static_cast<Reflect::Any*>(lua_touserdata(L, -1));
+	
+	any->~BasicAny();
 
 	return 0;
 }

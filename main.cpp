@@ -36,7 +36,7 @@ public:
 
 	void Draw()
 	{
-		std::cout << "x: " << x << " y: " << y << std::endl;
+		std::cout << "sprite " << name << " " << "x: " << x << " y: " << y << std::endl;
 	}
 
 	float GetX() const { return x; }

@@ -45,9 +45,9 @@ private:
 	static int NewObject(lua_State*);
 
 	// in user defined type metatable (used by full userdata and light userdata)
-	static int Finalize(lua_State*);    // __gc metamethod
 	static int Index(lua_State*);       // __index metamethod
 	static int NewIndex(lua_State*);    // __newindex metamethod
+	static int Finalize(lua_State*);    // __gc metamethod
 
 	// helper functions invoked when calling native free functions or user defined type's methods
 	static int InvokeMethod(lua_State*);

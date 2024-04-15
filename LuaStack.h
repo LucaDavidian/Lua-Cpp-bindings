@@ -4,7 +4,7 @@
 /*
 * Stack primary class template and explicit specializations provide interface with Lua stack
 * 
-* Lua has 9 types:
+* Lua has (10) 9 types:
 * 
 * -1: (LUA_TNONE) 
 * 0 : LUA_TNIL
@@ -293,5 +293,11 @@ void PushArgsToLua(lua_State *L, Arg &&arg, Rest&&... rest)
 
 	PushArgsToLua(L, std::forward<Rest>(rest)...);
 }
+
+// template <typename... Args>
+// void PushArgsToLua(lua_State *L, Args&&... args)
+// {
+// 	(... , LuaStack<std::remove_cv_t<std::remove_reference_t<Arg>>>::ToLua(L, std::forward<Arg>(arg)));
+// }
 
 #endif  // LUA_STACK_H
